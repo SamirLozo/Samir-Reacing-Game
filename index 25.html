@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>110 010 010 001</title>
+  <style>
+    body, html {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background-color: #fff;
+      font-family: 'Montserrat', sans-serif;
+    }
+    canvas {
+      display: block;
+      background-color: #fff;
+    }
+    #scoreBoard {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      font-size: 20px;
+      color: #333;
+      background-color: white;
+      padding: 10px 20px;
+      border-radius: 10px;
+    }
+  </style>
+</head>
+<body>
+
+<canvas id="gameCanvas"></canvas>
+<div id="scoreBoard">Samir Racing Game</div>
+
+<script>
+  // Canvas setup
+  const canvas = document.getElementById('gameCanvas');
+  const ctx = canvas.getContext('2d');
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+
+  // Score
+  let score = 0;
+  const scoreBoard = document.getElementById('scoreBoard');
+
+  // Car object
+  const car = {
+    x: canvas.width / 4 - 25, // Fixed X position (left side)
+    y: canvas.height - 150,
+    width: 50,
+    height: 30,
+    speed: 0.3,
+    maxSpeed: 10,
+    acceleration: 0.2,
+    deceleration: 0.1,
+    gravity: 0.5,
+    velocityY: 0
+  };
+
+  // Terrain setup using Perlin Noise for smoother terrain
+  // Simple Perlin noise implementation for demonstration
+  function generatePerlinNoise(length, smoothness) {
+    const noise = [];
+    let lastY = canvas.height - 200;
+    for (let i = 0; i < length; i++) {
+      const delta = (Math.random() - 0.7) * smoothness;
+      lastY += delta;
+      lastY = Math.min(canvas.height - 100, Math.max(canvas.height - 300, lastY));
+      noise.push(lastY);
+    }
+    return noise;
+  }
+
+  const terrainStep = 50; // Distance between terrain points
+  const initialTerrainLength = Math.ceil(canvas.width / terrainStep) + 10;
+  let terrain = [];
+  let terrainNoise = generatePerlinNoise(initialTerrainLength, 20);
+
+  for (let i = 0; i < initialTerrainLength; i++) {
+    terrain.push({ x: i * terrainStep, y: terrainNoise[i] });
+  }
+
+  // Coins setup
+  const coins = [];
+  const coinFrequency = 5; // Place a coin every 5 terrain points on average
+
+  function generateCoin(x, y) {
+    return { x: x, y: y - 30, collected: false };
+  }
+
+  // Place coins on terrain
+  for (let i = 0; i < terrain.length; i++) {
+    if (Math.random() < 1 / coinFrequency) {
+      coins.push(generateCoin(terrain[i].x, terrain[i].y));
+    }
+  }
+
+  // Draw terrain
+  function drawTerrain() {
+    ctx.beginPath();
+    ctx.moveTo(terrain[0].x, terrain[0].y);
+    for (let i = 1; i < terrain.length; i++) {
+      ctx.lineTo(terrain[i].x, terrain[i].y);
+    }
+    ctx.lineTo(terrain[terrain.length - 1].x, canvas.height);
+    ctx.lineTo(terrain[0].x, canvas.height);
+    ctx.closePath();
+    ctx.fillStyle = '#000';
+    ctx.fill();
+  }
+
+  // Draw coins
+  function drawCoins() {
+    coins.forEach(coin => {
+      if (!coin.collected) {
+        ctx.beginPath();
+        ctx.arc(coin.x, coin.y, 10, 0, Math.PI * 2);
+        ctx.fillStyle = '#000';
+        ctx.fill();
+        ctx.strokeStyle = '#000';
+        ctx.stroke();
+      }
+    });
+  }
+
+  // Draw car
+  function drawCar() {
+    ctx.fillStyle = 'black';
+    ctx.fillRect(car.x, car.y, car.width, car.height);
+    // Wheels
+    ctx.fillStyle = 'white';
+    ctx.beginPath();
+    ctx.arc(car.x + 10, car.y + car.height, 5, 0, Math.PI * 2);
+    ctx.arc(car.x + car.width - 10, car.y + car.height, 5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Get terrain height at specific x using linear interpolation
+  function getTerrainY(x) {
+    for (let i = 0; i < terrain.length - 1; i++) {
+      if (x >= terrain[i].x && x <= terrain[i + 1].x) {
+        let ratio = (x - terrain[i].x) / (terrain[i + 1].x - terrain[i].x);
+        return terrain[i].y + ratio * (terrain[i + 1].y - terrain[i].y);
+      }
+    }
+    return canvas.height;
+  }
+
+  // Check collision with coins
+  function checkCoinCollision() {
+    coins.forEach(coin => {
+      if (!coin.collected) {
+        const distance = Math.sqrt(
+          Math.pow(car.x + car.width / 2 - coin.x, 2) +
+          Math.pow(car.y + car.height / 2 - coin.y, 2)
+        );
+        if (distance < 20) {
+          coin.collected = true;
+          score += 93;
+          scoreBoard.textContent = `$${score}`;
+        }
+      }
+    });
+  }
+
+  // Game loop
+  function gameLoop() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Apply gravity
+    car.velocityY += car.gravity;
+    car.y += car.velocityY;
+
+    // Collision with terrain
+    const carFrontX = car.x + car.width / 3;
+    const terrainY = getTerrainY(carFrontX);
+    if (car.y + car.height > terrainY) {
+      car.y = terrainY - car.height;
+      car.velocityY = 0;
+    }
+
+    // Handle speed with acceleration and deceleration
+    if (isAccelerating) {
+      car.speed = Math.min(car.speed + car.acceleration, car.maxSpeed);
+    } else {
+      if (car.speed > 0) {
+        car.speed = Math.max(car.speed - car.deceleration, 0);
+      } else if (car.speed < 0) {
+        car.speed = Math.min(car.speed + car.deceleration, 0);
+      }
+    }
+
+    // Scroll terrain based on car speed
+    if (car.speed !== 0) {
+      // Move terrain points
+      terrain.forEach(point => {
+        point.x -= car.speed;
+      });
+
+      // Move coins
+      coins.forEach(coin => {
+        if (!coin.collected) {
+          coin.x -= car.speed;
+        }
+      });
+
+      while (terrain.length > 0 && terrain[0].x < -terrainStep) {
+        terrain.shift();
+        const lastPoint = terrain[terrain.length - 1];
+        const newY = lastPoint.y + (Math.random() - 0.5) * 30;
+        const boundedY = Math.min(canvas.height - 100, Math.max(canvas.height - 300, newY));
+        terrain.push({ x: lastPoint.x + terrainStep, y: boundedY });
+
+        // Possibly add a new coin
+        if (Math.random() < 1 / coinFrequency) {
+          coins.push(generateCoin(terrain[terrain.length - 1].x, terrain[terrain.length - 1].y));
+        }
+      }
+
+      // Remove off-screen coins
+      coins.forEach((coin, index) => {
+        if (coin.x < -50) {
+          coins.splice(index, 1);
+        }
+      });
+    }
+
+    // Check for coin collisions
+    checkCoinCollision();
+
+    // Draw everything
+    drawTerrain();
+    drawCoins();
+    drawCar();
+
+    requestAnimationFrame(gameLoop);
+  }
+
+  // Controls: Hold to accelerate
+  let isAccelerating = false;
+
+  function startAccelerate() {
+    isAccelerating = true;
+  }
+
+  function stopAccelerate() {
+    isAccelerating = false;
+  }
+
+  // Mouse events
+  window.addEventListener('mousedown', startAccelerate);
+  window.addEventListener('mouseup', stopAccelerate);
+  window.addEventListener('mouseleave', stopAccelerate);
+
+  // Touch event
+  window.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    startAccelerate();
+  }, { passive: false });
+
+  window.addEventListener('touchend', (e) => {
+    e.preventDefault();
+    stopAccelerate();
+  });
+
+  gameLoop();
+
+  window.addEventListener('resize', () => {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+  });
+</script>
+
+</body>
+</html>
